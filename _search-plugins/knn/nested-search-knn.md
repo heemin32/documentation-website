@@ -49,8 +49,7 @@ PUT my-knn-index-1
             }
           },
           "color": {
-            "type": "text",
-            "index": false
+            "type": "text"
           }
         }
       }
@@ -65,9 +64,9 @@ After you create the index, add some data to it:
 ```json
 PUT _bulk?refresh=true
 { "index": { "_index": "my-knn-index-1", "_id": "1" } }
-{"nested_field":[{"my_vector":[1,1,1], "color": "blue"},{"my_vector":[2,2,2], "color": "yellow"},{"my_vector":[3,3,3], "color": "white"}]}
+{"nested_field":[{"my_vector":[1,1,1], "color": "blue"},{"my_vector":[2,2,2], "color": "blue"},{"my_vector":[3,3,3], "color": "white"}]}
 { "index": { "_index": "my-knn-index-1", "_id": "2" } }
-{"nested_field":[{"my_vector":[10,10,10], "color": "red"},{"my_vector":[20,20,20], "color": "green"},{"my_vector":[30,30,30], "color": "black"}]}
+{"nested_field":[{"my_vector":[10,10,10], "color": "blue"},{"my_vector":[20,20,20], "color": "yellow"},{"my_vector":[30,30,30], "color": "white"}]}
 ```
 {% include copy-curl.html %}
 
@@ -132,7 +131,7 @@ Even though all three vectors nearest to the query vector are in document 1, the
                 2,
                 2
               ],
-              "color": "yellow"
+              "color": "blue"
             },
             {
               "my_vector": [
@@ -157,7 +156,7 @@ Even though all three vectors nearest to the query vector are in document 1, the
                 10,
                 10
               ],
-              "color": "red"
+              "color": "blue"
             },
             {
               "my_vector": [
@@ -165,7 +164,7 @@ Even though all three vectors nearest to the query vector are in document 1, the
                 20,
                 20
               ],
-              "color": "green"
+              "color": "yellow"
             },
             {
               "my_vector": [
@@ -173,7 +172,7 @@ Even though all three vectors nearest to the query vector are in document 1, the
                 30,
                 30
               ],
-              "color": "black"
+              "color": "white"
             }
           ]
         }
@@ -185,7 +184,9 @@ Even though all three vectors nearest to the query vector are in document 1, the
 
 ## Inner hits 
 
-When you retrieve documents based on matches in nested fields, by default, the response does not contain information about which inner objects matched the query. Thus, it is not apparent why the document is a match. To include information about the matching nested fields in the response, you can provide the `inner_hits` object in your query. To return only certain fields of the matching documents within `inner_hits`, specify the document fields in the `fields` array. Generally, you should also exclude `_source` from the results to avoid returning the whole document. The following example returns only the `color` inner field of the `nested_field`:
+When you retrieve documents based on matches in nested fields, by default, the response does not contain information about which inner objects matched the query. Thus, it is not apparent why the document is a match. To include information about the matching nested fields in the response, you can provide the `inner_hits` object in your query. To return only certain fields of the matching documents within `inner_hits`, specify the document fields in the `fields` array. Generally, you should also exclude `_source` from the results to avoid returning the whole document. The following example returns only the `color` inner field of the `nested_field`.
+
+Keep in mind that the parent document's score is determined by the highest score among its nested fields. However, in cases involving approximate nearest neighbor (ANN) search, the parent document's score might not always correspond to the highest score among its nested fields:
 
 ```json
 GET my-knn-index-1/_search
@@ -198,7 +199,12 @@ GET my-knn-index-1/_search
         "knn": {
           "nested_field.my_vector": {
             "vector": [1,1,1],
-            "k": 2
+            "k": 2,
+            "filter": {
+              "term": {
+                "nested_field.color": "blue"
+              }
+            }
           }
         }
       },
@@ -212,11 +218,11 @@ GET my-knn-index-1/_search
 ```
 {% include copy-curl.html %}
 
-The response contains matching documents. For each matching document, the `inner_hits` object contains only the `nested_field.color` fields of the matched documents in the `fields` array:
+The response includes all nested field documents that match the query. For each matching nested field document, the fields object contains only the `nested_field.color` field:
 
 ```json
 {
-  "took": 4,
+  "took": 13,
   "timed_out": false,
   "_shards": {
     "total": 1,
@@ -239,7 +245,7 @@ The response contains matching documents. For each matching document, the `inner
           "nested_field": {
             "hits": {
               "total": {
-                "value": 1,
+                "value": 2,
                 "relation": "eq"
               },
               "max_score": 1.0,
@@ -252,6 +258,20 @@ The response contains matching documents. For each matching document, the `inner
                     "offset": 0
                   },
                   "_score": 1.0,
+                  "fields": {
+                    "nested_field.color": [
+                      "blue"
+                    ]
+                  }
+                },
+                {
+                  "_index": "my-knn-index-1",
+                  "_id": "1",
+                  "_nested": {
+                    "field": "nested_field",
+                    "offset": 1
+                  },
+                  "_score": 0.25,
                   "fields": {
                     "nested_field.color": [
                       "blue"
@@ -286,7 +306,7 @@ The response contains matching documents. For each matching document, the `inner
                   "_score": 0.0040983604,
                   "fields": {
                     "nested_field.color": [
-                      "red"
+                      "blue"
                     ]
                   }
                 }
